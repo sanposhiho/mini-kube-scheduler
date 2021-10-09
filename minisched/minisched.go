@@ -2,8 +2,11 @@ package minisched
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"time"
+
+	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodename"
 
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 
@@ -22,20 +25,44 @@ type Scheduler struct {
 	SchedulingQueue *queue.SchedulingQueue
 
 	client clientset.Interface
+
+	filterPlugins []framework.FilterPlugin
 }
 
 func New(
 	client clientset.Interface,
 	informerFactory informers.SharedInformerFactory,
-) *Scheduler {
+) (*Scheduler, error) {
+	filterP, err := createFilterPlugins()
+	if err != nil {
+		return nil, fmt.Errorf("create filter plugins: %w", err)
+	}
+
 	sched := &Scheduler{
 		SchedulingQueue: queue.New(),
 		client:          client,
+
+		filterPlugins: filterP,
 	}
 
 	addAllEventHandlers(sched, informerFactory)
 
-	return sched
+	return sched, nil
+}
+
+func createFilterPlugins() ([]framework.FilterPlugin, error) {
+	// nodename is FilterPlugin.
+	nodenameplugin, err := nodename.New(nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create nodename plugin: %w", err)
+	}
+
+	// We use nodename plugin only.
+	filterPlugins := []framework.FilterPlugin{
+		nodenameplugin.(framework.FilterPlugin),
+	}
+
+	return filterPlugins, nil
 }
 
 func (sched *Scheduler) Run(ctx context.Context) {
@@ -53,11 +80,22 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 		klog.Error(err)
 		return
 	}
-	klog.Info("minischeduler: Got Nodes successfully")
+	klog.Info("minischeduler: Get Nodes successfully")
+
+	// filter
+	fasibleNodes, status := sched.RunFilterPlugins(ctx, nil, pod, nodes.Items)
+	if !status.IsSuccess() {
+		klog.Error(status.AsError())
+		return
+	}
+	if len(fasibleNodes) == 0 {
+		klog.Info("no fasible nodes for " + pod.Name)
+		return
+	}
 
 	// select node randomly
 	rand.Seed(time.Now().UnixNano())
-	selectedNode := nodes.Items[rand.Intn(len(nodes.Items))]
+	selectedNode := fasibleNodes[rand.Intn(len(nodes.Items))]
 
 	if err := sched.Bind(ctx, nil, pod, selectedNode.Name); err != nil {
 		klog.Error(err)
@@ -65,6 +103,28 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	}
 
 	klog.Info("minischeduler: Bind Pod successfully")
+}
+
+func (s *Scheduler) RunFilterPlugins(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodes []v1.Node) ([]*v1.Node, *framework.Status) {
+	feasibleNodes := make([]*v1.Node, len(nodes))
+
+	// TODO: consider about nominated pod
+	statuses := make(framework.PluginToStatus)
+	for _, n := range nodes {
+		nodeInfo := framework.NewNodeInfo()
+		nodeInfo.SetNode(&n)
+		for _, pl := range s.filterPlugins {
+			status := pl.Filter(ctx, state, pod, nodeInfo)
+			if !status.IsSuccess() {
+				status.SetFailedPlugin(pl.Name())
+				statuses[pl.Name()] = status
+				return nil, statuses.Merge()
+			}
+			feasibleNodes = append(feasibleNodes, nodeInfo.Node())
+		}
+	}
+
+	return feasibleNodes, statuses.Merge()
 }
 
 func (sched *Scheduler) Bind(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) error {

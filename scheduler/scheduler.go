@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/sanposhiho/mini-kube-scheduler/minisched"
 
@@ -59,10 +60,14 @@ func (s *Service) StartScheduler(versionedcfg *v1beta2config.KubeSchedulerConfig
 
 	s.currentSchedulerCfg = versionedcfg.DeepCopy()
 
-	sched := minisched.New(
+	sched, err := minisched.New(
 		clientSet,
 		informerFactory,
 	)
+	if err != nil {
+		cancel()
+		return fmt.Errorf("create minisched: %w", err)
+	}
 
 	informerFactory.Start(ctx.Done())
 	informerFactory.WaitForCacheSync(ctx.Done())

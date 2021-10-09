@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/sanposhiho/mini-kube-scheduler/scheduler"
@@ -68,18 +69,23 @@ func start() error {
 
 func scenario(client clientset.Interface) error {
 	ctx := context.Background()
-	_, err := client.CoreV1().Nodes().Create(ctx, &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "node1",
-		},
-	}, metav1.CreateOptions{})
-	if err != nil {
-		return fmt.Errorf("create node: %w", err)
+
+	// create node0 ~ node9
+	for i := 0; i < 10; i++ {
+		suffix := strconv.Itoa(i)
+		_, err := client.CoreV1().Nodes().Create(ctx, &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "node" + suffix,
+			},
+		}, metav1.CreateOptions{})
+		if err != nil {
+			return fmt.Errorf("create node: %w", err)
+		}
 	}
 
-	klog.Info("scenario: node1 created")
+	klog.Info("scenario: all nodes created")
 
-	_, err = client.CoreV1().Pods("default").Create(ctx, &v1.Pod{
+	_, err := client.CoreV1().Pods("default").Create(ctx, &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "pod1"},
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{
@@ -88,6 +94,8 @@ func scenario(client clientset.Interface) error {
 					Image: "k8s.gcr.io/pause:3.5",
 				},
 			},
+			// this pod will be bound to node9 with nodename plugin
+			NodeName: "node9",
 		},
 	}, metav1.CreateOptions{})
 	if err != nil {
