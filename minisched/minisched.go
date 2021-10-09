@@ -29,6 +29,10 @@ type Scheduler struct {
 	filterPlugins []framework.FilterPlugin
 }
 
+// =======
+// funcs for initialize
+// =======
+
 func New(
 	client clientset.Interface,
 	informerFactory informers.SharedInformerFactory,
@@ -65,6 +69,10 @@ func createFilterPlugins() ([]framework.FilterPlugin, error) {
 	return filterPlugins, nil
 }
 
+// ======
+// main logic
+// ======
+
 func (sched *Scheduler) Run(ctx context.Context) {
 	wait.UntilWithContext(ctx, sched.scheduleOne, 0)
 }
@@ -72,7 +80,7 @@ func (sched *Scheduler) Run(ctx context.Context) {
 func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	klog.Info("minischeduler: Try to get pod from queue....")
 	pod := sched.SchedulingQueue.NextPod()
-	klog.Info("minischeduler: Start schedule(" + pod.Name + ")")
+	klog.Info("minischeduler: Start schedule: pod name:" + pod.Name)
 
 	// get nodes
 	nodes, err := sched.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
@@ -81,6 +89,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 		return
 	}
 	klog.Info("minischeduler: Get Nodes successfully")
+	klog.Info("minischeduler: got nodes: ", nodes)
 
 	// filter
 	fasibleNodes, status := sched.RunFilterPlugins(ctx, nil, pod, nodes.Items)
@@ -105,26 +114,29 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	klog.Info("minischeduler: Bind Pod successfully")
 }
 
-func (s *Scheduler) RunFilterPlugins(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodes []v1.Node) ([]*v1.Node, *framework.Status) {
-	feasibleNodes := make([]*v1.Node, len(nodes))
+func (sched *Scheduler) RunFilterPlugins(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodes []v1.Node) ([]*v1.Node, *framework.Status) {
+	feasibleNodes := make([]*v1.Node, 0, len(nodes))
 
 	// TODO: consider about nominated pod
-	statuses := make(framework.PluginToStatus)
 	for _, n := range nodes {
+		n := n
 		nodeInfo := framework.NewNodeInfo()
 		nodeInfo.SetNode(&n)
-		for _, pl := range s.filterPlugins {
-			status := pl.Filter(ctx, state, pod, nodeInfo)
+
+		status := framework.NewStatus(framework.Success)
+		for _, pl := range sched.filterPlugins {
+			status = pl.Filter(ctx, state, pod, nodeInfo)
 			if !status.IsSuccess() {
 				status.SetFailedPlugin(pl.Name())
-				statuses[pl.Name()] = status
-				return nil, statuses.Merge()
+				break
 			}
+		}
+		if status.IsSuccess() {
 			feasibleNodes = append(feasibleNodes, nodeInfo.Node())
 		}
 	}
 
-	return feasibleNodes, statuses.Merge()
+	return feasibleNodes, nil
 }
 
 func (sched *Scheduler) Bind(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) error {
