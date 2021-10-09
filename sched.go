@@ -94,8 +94,6 @@ func scenario(client clientset.Interface) error {
 					Image: "k8s.gcr.io/pause:3.5",
 				},
 			},
-			// this pod will be bound to node9 with nodename plugin
-			NodeName: "node9",
 		},
 	}, metav1.CreateOptions{})
 	if err != nil {
@@ -112,6 +110,7 @@ func scenario(client clientset.Interface) error {
 		return fmt.Errorf("get pod: %w", err)
 	}
 
+	// pod1 always bound to node1, because node1 got high score from nodenumber score plugin
 	klog.Info("scenario: pod1 is bound to " + pod.Spec.NodeName)
 
 	return nil
