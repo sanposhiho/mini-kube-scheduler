@@ -16,23 +16,52 @@ import (
 type NodeNumber struct{}
 
 var _ framework.ScorePlugin = &NodeNumber{}
+var _ framework.PreScorePlugin = &NodeNumber{}
 
 // Name is the name of the plugin used in the plugin registry and configurations.
 const Name = "NodeNumber"
+const preScoreStateKey = "PreScore" + Name
 
 // Name returns name of the plugin. It is used in logs, etc.
 func (pl *NodeNumber) Name() string {
 	return Name
 }
 
-// Score invoked at the score extension point.
-func (pl *NodeNumber) Score(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) {
+// preScoreState computed at PreScore and used at Score.
+type preScoreState struct {
+	podSuffixNumber int
+}
+
+// Clone implements the mandatory Clone interface. We don't really copy the data since
+// there is no need for that.
+func (s *preScoreState) Clone() framework.StateData {
+	return s
+}
+
+func (pl *NodeNumber) PreScore(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodes []*v1.Node) *framework.Status {
 	podNameLastChar := pod.Name[len(pod.Name)-1:]
 	podnum, err := strconv.Atoi(podNameLastChar)
 	if err != nil {
 		// return success even if its suffix is non-number.
-		return 0, nil
+		return nil
 	}
+
+	s := &preScoreState{
+		podSuffixNumber: podnum,
+	}
+	state.Write(preScoreStateKey, s)
+
+	return nil
+}
+
+// Score invoked at the score extension point.
+func (pl *NodeNumber) Score(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) {
+	data, err := state.Read(preScoreStateKey)
+	if err != nil {
+		return 0, framework.AsStatus(err)
+	}
+
+	s := data.(*preScoreState)
 
 	nodeNameLastChar := nodeName[len(nodeName)-1:]
 
@@ -42,7 +71,7 @@ func (pl *NodeNumber) Score(ctx context.Context, state *framework.CycleState, po
 		return 0, nil
 	}
 
-	if podnum == nodenum {
+	if s.podSuffixNumber == nodenum {
 		// if match, node get high score.
 		return 10, nil
 	}

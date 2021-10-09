@@ -7,9 +7,8 @@ import (
 
 	"github.com/sanposhiho/mini-kube-scheduler/minisched/plugins/score/nodenumber"
 
-	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodename"
-
 	"k8s.io/kubernetes/pkg/scheduler/framework"
+	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodename"
 
 	"k8s.io/klog/v2"
 
@@ -27,8 +26,9 @@ type Scheduler struct {
 
 	client clientset.Interface
 
-	filterPlugins []framework.FilterPlugin
-	scorePlugins  []framework.ScorePlugin
+	filterPlugins   []framework.FilterPlugin
+	preScorePlugins []framework.PreScorePlugin
+	scorePlugins    []framework.ScorePlugin
 }
 
 // =======
@@ -44,6 +44,11 @@ func New(
 		return nil, fmt.Errorf("create filter plugins: %w", err)
 	}
 
+	preScoreP, err := createPreScorePlugins()
+	if err != nil {
+		return nil, fmt.Errorf("create pre score plugins: %w", err)
+	}
+
 	scoreP, err := createScorePlugins()
 	if err != nil {
 		return nil, fmt.Errorf("create score plugins: %w", err)
@@ -53,8 +58,9 @@ func New(
 		SchedulingQueue: queue.New(),
 		client:          client,
 
-		filterPlugins: filterP,
-		scorePlugins:  scoreP,
+		filterPlugins:   filterP,
+		preScorePlugins: preScoreP,
+		scorePlugins:    scoreP,
 	}
 
 	addAllEventHandlers(sched, informerFactory)
@@ -77,9 +83,24 @@ func createFilterPlugins() ([]framework.FilterPlugin, error) {
 	return filterPlugins, nil
 }
 
+func createPreScorePlugins() ([]framework.PreScorePlugin, error) {
+	// nodenumber is FilterPlugin.
+	nodenumberplugin, err := createNodeNumberPlugin()
+	if err != nil {
+		return nil, fmt.Errorf("create nodenumber plugin: %w", err)
+	}
+
+	// We use nodenumber plugin only.
+	preScorePlugins := []framework.PreScorePlugin{
+		nodenumberplugin.(framework.PreScorePlugin),
+	}
+
+	return preScorePlugins, nil
+}
+
 func createScorePlugins() ([]framework.ScorePlugin, error) {
 	// nodenumber is FilterPlugin.
-	nodenumberplugin, err := nodenumber.New(nil, nil)
+	nodenumberplugin, err := createNodeNumberPlugin()
 	if err != nil {
 		return nil, fmt.Errorf("create nodenumber plugin: %w", err)
 	}
@@ -90,6 +111,19 @@ func createScorePlugins() ([]framework.ScorePlugin, error) {
 	}
 
 	return filterPlugins, nil
+}
+
+var nodenumberplugin framework.Plugin
+
+func createNodeNumberPlugin() (framework.Plugin, error) {
+	if nodenumberplugin != nil {
+		return nodenumberplugin, nil
+	}
+
+	p, err := nodenumber.New(nil, nil)
+	nodenumberplugin = p
+
+	return p, err
 }
 
 // ======
@@ -105,6 +139,8 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	pod := sched.SchedulingQueue.NextPod()
 	klog.Info("minischeduler: Start schedule: pod name:" + pod.Name)
 
+	state := framework.NewCycleState()
+
 	// get nodes
 	nodes, err := sched.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -115,7 +151,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	klog.Info("minischeduler: got nodes: ", nodes)
 
 	// filter
-	fasibleNodes, status := sched.RunFilterPlugins(ctx, nil, pod, nodes.Items)
+	fasibleNodes, status := sched.RunFilterPlugins(ctx, state, pod, nodes.Items)
 	if !status.IsSuccess() {
 		klog.Error(status.AsError())
 		return
@@ -128,8 +164,16 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	klog.Info("minischeduler: ran filter plugins successfully")
 	klog.Info("minischeduler: fasible nodes: ", fasibleNodes)
 
+	// pre score
+	status = sched.RunPreScorePlugins(ctx, state, pod, fasibleNodes)
+	if !status.IsSuccess() {
+		klog.Error(status.AsError())
+		return
+	}
+	klog.Info("minischeduler: ran pre score plugins successfully")
+
 	// score
-	score, status := sched.RunScorePlugins(ctx, nil, pod, fasibleNodes)
+	score, status := sched.RunScorePlugins(ctx, state, pod, fasibleNodes)
 	if !status.IsSuccess() {
 		klog.Error(status.AsError())
 		return
@@ -175,6 +219,17 @@ func (sched *Scheduler) RunFilterPlugins(ctx context.Context, state *framework.C
 	}
 
 	return feasibleNodes, nil
+}
+
+func (sched *Scheduler) RunPreScorePlugins(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodes []*v1.Node) *framework.Status {
+	for _, pl := range sched.preScorePlugins {
+		status := pl.PreScore(ctx, state, pod, nodes)
+		if !status.IsSuccess() {
+			return status
+		}
+	}
+
+	return nil
 }
 
 func (sched *Scheduler) RunScorePlugins(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodes []*v1.Node) (framework.NodeScoreList, *framework.Status) {
