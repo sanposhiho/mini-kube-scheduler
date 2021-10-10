@@ -3,20 +3,29 @@ package nodenumber
 import (
 	"context"
 	"strconv"
+	"time"
+
+	"github.com/sanposhiho/mini-kube-scheduler/minisched/waitingpod"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 )
 
-// NodeNumber is a score plugin that favors nodes that has the same number suffix as number suffix of pod name.
-// For example: When schedule a pod named Pod1, a Node named Node9 gets a higher score than a node named Node1.
+// NodeNumber is a plugin that favors nodes that has the same number suffix as number suffix of pod name.
+// And it will delay the binding of pod by {node suffix number} seconds.
+// For example:
+// When schedule a pod named Pod1, a Node named Node9 gets a higher score than a node named Node1.
+// And if it is decided that Pod1 will go to Node9, this plugin delay the binding by 9 seconds.
 //
 // IMPORTANT NOTE: this plugin only handle single digit numbers only.
-type NodeNumber struct{}
+type NodeNumber struct {
+	h waitingpod.Handle
+}
 
 var _ framework.ScorePlugin = &NodeNumber{}
 var _ framework.PreScorePlugin = &NodeNumber{}
+var _ framework.PermitPlugin = &NodeNumber{}
 
 // Name is the name of the plugin used in the plugin registry and configurations.
 const Name = "NodeNumber"
@@ -84,7 +93,26 @@ func (pl *NodeNumber) ScoreExtensions() framework.ScoreExtensions {
 	return nil
 }
 
+func (pl *NodeNumber) Permit(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) (*framework.Status, time.Duration) {
+	nodeNameLastChar := nodeName[len(nodeName)-1:]
+
+	nodenum, err := strconv.Atoi(nodeNameLastChar)
+	if err != nil {
+		// return allow(success) even if its suffix is non-number.
+		return nil, 0
+	}
+
+	// allow pod after {nodenum} seconds
+	time.AfterFunc(time.Duration(nodenum)*time.Second, func() {
+		wp := pl.h.GetWaitingPod(p.GetUID())
+		wp.Allow(pl.Name())
+	})
+
+	timeout := time.Duration(10) * time.Second
+	return framework.NewStatus(framework.Wait, ""), timeout
+}
+
 // New initializes a new plugin and returns it.
-func New(_ runtime.Object, _ framework.Handle) (framework.Plugin, error) {
-	return &NodeNumber{}, nil
+func New(_ runtime.Object, h waitingpod.Handle) (framework.Plugin, error) {
+	return &NodeNumber{h: h}, nil
 }

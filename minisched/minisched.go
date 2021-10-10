@@ -4,6 +4,11 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"time"
+
+	"github.com/sanposhiho/mini-kube-scheduler/minisched/waitingpod"
+
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/sanposhiho/mini-kube-scheduler/minisched/plugins/score/nodenumber"
 
@@ -26,9 +31,12 @@ type Scheduler struct {
 
 	client clientset.Interface
 
+	waitingPods map[types.UID]*waitingpod.WaitingPod
+
 	filterPlugins   []framework.FilterPlugin
 	preScorePlugins []framework.PreScorePlugin
 	scorePlugins    []framework.ScorePlugin
+	permitPlugins   []framework.PermitPlugin
 }
 
 // =======
@@ -39,36 +47,42 @@ func New(
 	client clientset.Interface,
 	informerFactory informers.SharedInformerFactory,
 ) (*Scheduler, error) {
-	filterP, err := createFilterPlugins()
-	if err != nil {
-		return nil, fmt.Errorf("create filter plugins: %w", err)
-	}
-
-	preScoreP, err := createPreScorePlugins()
-	if err != nil {
-		return nil, fmt.Errorf("create pre score plugins: %w", err)
-	}
-
-	scoreP, err := createScorePlugins()
-	if err != nil {
-		return nil, fmt.Errorf("create score plugins: %w", err)
-	}
-
 	sched := &Scheduler{
 		SchedulingQueue: queue.New(),
 		client:          client,
-
-		filterPlugins:   filterP,
-		preScorePlugins: preScoreP,
-		scorePlugins:    scoreP,
+		waitingPods:     map[types.UID]*waitingpod.WaitingPod{},
 	}
+
+	filterP, err := createFilterPlugins(sched)
+	if err != nil {
+		return nil, fmt.Errorf("create filter plugins: %w", err)
+	}
+	sched.filterPlugins = filterP
+
+	preScoreP, err := createPreScorePlugins(sched)
+	if err != nil {
+		return nil, fmt.Errorf("create pre score plugins: %w", err)
+	}
+	sched.preScorePlugins = preScoreP
+
+	scoreP, err := createScorePlugins(sched)
+	if err != nil {
+		return nil, fmt.Errorf("create score plugins: %w", err)
+	}
+	sched.scorePlugins = scoreP
+
+	permitP, err := createPermitPlugins(sched)
+	if err != nil {
+		return nil, fmt.Errorf("create permit plugins: %w", err)
+	}
+	sched.permitPlugins = permitP
 
 	addAllEventHandlers(sched, informerFactory)
 
 	return sched, nil
 }
 
-func createFilterPlugins() ([]framework.FilterPlugin, error) {
+func createFilterPlugins(h waitingpod.Handle) ([]framework.FilterPlugin, error) {
 	// nodename is FilterPlugin.
 	nodenameplugin, err := nodename.New(nil, nil)
 	if err != nil {
@@ -83,9 +97,9 @@ func createFilterPlugins() ([]framework.FilterPlugin, error) {
 	return filterPlugins, nil
 }
 
-func createPreScorePlugins() ([]framework.PreScorePlugin, error) {
+func createPreScorePlugins(h waitingpod.Handle) ([]framework.PreScorePlugin, error) {
 	// nodenumber is FilterPlugin.
-	nodenumberplugin, err := createNodeNumberPlugin()
+	nodenumberplugin, err := createNodeNumberPlugin(h)
 	if err != nil {
 		return nil, fmt.Errorf("create nodenumber plugin: %w", err)
 	}
@@ -98,9 +112,9 @@ func createPreScorePlugins() ([]framework.PreScorePlugin, error) {
 	return preScorePlugins, nil
 }
 
-func createScorePlugins() ([]framework.ScorePlugin, error) {
+func createScorePlugins(h waitingpod.Handle) ([]framework.ScorePlugin, error) {
 	// nodenumber is FilterPlugin.
-	nodenumberplugin, err := createNodeNumberPlugin()
+	nodenumberplugin, err := createNodeNumberPlugin(h)
 	if err != nil {
 		return nil, fmt.Errorf("create nodenumber plugin: %w", err)
 	}
@@ -113,14 +127,29 @@ func createScorePlugins() ([]framework.ScorePlugin, error) {
 	return filterPlugins, nil
 }
 
+func createPermitPlugins(h waitingpod.Handle) ([]framework.PermitPlugin, error) {
+	// nodenumber is PermitPlugin.
+	nodenumberplugin, err := createNodeNumberPlugin(h)
+	if err != nil {
+		return nil, fmt.Errorf("create nodenumber plugin: %w", err)
+	}
+
+	// We use nodenumber plugin only.
+	permitPlugins := []framework.PermitPlugin{
+		nodenumberplugin.(framework.PermitPlugin),
+	}
+
+	return permitPlugins, nil
+}
+
 var nodenumberplugin framework.Plugin
 
-func createNodeNumberPlugin() (framework.Plugin, error) {
+func createNodeNumberPlugin(h waitingpod.Handle) (framework.Plugin, error) {
 	if nodenumberplugin != nil {
 		return nodenumberplugin, nil
 	}
 
-	p, err := nodenumber.New(nil, nil)
+	p, err := nodenumber.New(nil, h)
 	nodenumberplugin = p
 
 	return p, err
@@ -182,18 +211,35 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	klog.Info("minischeduler: ran score plugins successfully")
 	klog.Info("minischeduler: score results", score)
 
-	hostname, err := sched.selectHost(score)
+	nodename, err := sched.selectHost(score)
 	if err != nil {
 		klog.Error(err)
 		return
 	}
 
-	if err := sched.Bind(ctx, nil, pod, hostname); err != nil {
-		klog.Error(err)
+	klog.Info("minischeduler: pod " + pod.Name + " will be bound to node " + nodename)
+
+	status = sched.RunPermitPlugins(ctx, state, pod, nodename)
+	if status.Code() != framework.Wait && !status.IsSuccess() {
+		klog.Error(status.AsError())
 		return
 	}
 
-	klog.Info("minischeduler: Bind Pod successfully")
+	go func() {
+		ctx := ctx
+
+		status := sched.WaitOnPermit(ctx, pod)
+		if !status.IsSuccess() {
+			klog.Error(status.AsError())
+			return
+		}
+
+		if err := sched.Bind(ctx, nil, pod, nodename); err != nil {
+			klog.Error(err)
+			return
+		}
+		klog.Info("minischeduler: Bind Pod successfully")
+	}()
 }
 
 func (sched *Scheduler) RunFilterPlugins(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodes []v1.Node) ([]*v1.Node, *framework.Status) {
@@ -269,6 +315,64 @@ func (sched *Scheduler) RunScorePlugins(ctx context.Context, state *framework.Cy
 	return result, nil
 }
 
+func (sched *Scheduler) RunPermitPlugins(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) (status *framework.Status) {
+	pluginsWaitTime := make(map[string]time.Duration)
+	statusCode := framework.Success
+	for _, pl := range sched.permitPlugins {
+		status, timeout := pl.Permit(ctx, state, pod, nodeName)
+		if !status.IsSuccess() {
+			if status.IsUnschedulable() {
+				klog.V(4).InfoS("Pod rejected by permit plugin", "pod", klog.KObj(pod), "plugin", pl.Name(), "status", status.Message())
+				status.SetFailedPlugin(pl.Name())
+				return status
+			}
+			if status.Code() == framework.Wait {
+				pluginsWaitTime[pl.Name()] = timeout
+				statusCode = framework.Wait
+			} else {
+				err := status.AsError()
+				klog.ErrorS(err, "Failed running Permit plugin", "plugin", pl.Name(), "pod", klog.KObj(pod))
+				return framework.AsStatus(fmt.Errorf("running Permit plugin %q: %w", pl.Name(), err)).WithFailedPlugin(pl.Name())
+			}
+		}
+	}
+	if statusCode == framework.Wait {
+		waitingPod := waitingpod.NewWaitingPod(pod, pluginsWaitTime)
+		sched.waitingPods[pod.UID] = waitingPod
+		msg := fmt.Sprintf("one or more plugins asked to wait and no plugin rejected pod %q", pod.Name)
+		klog.V(4).InfoS("One or more plugins asked to wait and no plugin rejected pod", "pod", klog.KObj(pod))
+		return framework.NewStatus(framework.Wait, msg)
+	}
+	return nil
+}
+
+// WaitOnPermit will block, if the pod is a waiting pod, until the waiting pod is rejected or allowed.
+func (sched *Scheduler) WaitOnPermit(ctx context.Context, pod *v1.Pod) *framework.Status {
+	waitingPod := sched.waitingPods[pod.UID]
+	if waitingPod == nil {
+		return nil
+	}
+	defer delete(sched.waitingPods, pod.UID)
+
+	klog.InfoS("Pod waiting on permit", "pod", klog.KObj(pod))
+
+	s := waitingPod.GetSignal()
+
+	if !s.IsSuccess() {
+		if s.IsUnschedulable() {
+			klog.InfoS("Pod rejected while waiting on permit", "pod", klog.KObj(pod), "status", s.Message())
+
+			s.SetFailedPlugin(s.FailedPlugin())
+			return s
+		}
+
+		err := s.AsError()
+		klog.ErrorS(err, "Failed waiting on permit for pod", "pod", klog.KObj(pod))
+		return framework.AsStatus(fmt.Errorf("waiting on permit for pod: %w", err)).WithFailedPlugin(s.FailedPlugin())
+	}
+	return nil
+}
+
 func (sched *Scheduler) Bind(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) error {
 	binding := &v1.Binding{
 		ObjectMeta: metav1.ObjectMeta{Namespace: p.Namespace, Name: p.Name, UID: p.UID},
@@ -285,6 +389,10 @@ func (sched *Scheduler) Bind(ctx context.Context, state *framework.CycleState, p
 // ============
 // util funcs
 // ============
+
+func (sched *Scheduler) GetWaitingPod(uid types.UID) *waitingpod.WaitingPod {
+	return sched.waitingPods[uid]
+}
 
 func (sched *Scheduler) selectHost(nodeScoreList framework.NodeScoreList) (string, error) {
 	if len(nodeScoreList) == 0 {
