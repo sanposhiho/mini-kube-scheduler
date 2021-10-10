@@ -100,18 +100,52 @@ func scenario(client clientset.Interface) error {
 		return fmt.Errorf("create pod: %w", err)
 	}
 
+	_, err = client.CoreV1().Pods("default").Create(ctx, &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "pod9"},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name:  "container1",
+					Image: "k8s.gcr.io/pause:3.5",
+				},
+			},
+		},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("create pod: %w", err)
+	}
+
 	klog.Info("scenario: pod1 created")
 
 	// wait to schedule
 	time.Sleep(4 * time.Second)
 
-	pod, err := client.CoreV1().Pods("default").Get(ctx, "pod1", metav1.GetOptions{})
+	pod1, err := client.CoreV1().Pods("default").Get(ctx, "pod1", metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("get pod: %w", err)
+	}
+
+	pod9, err := client.CoreV1().Pods("default").Get(ctx, "pod9", metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("get pod: %w", err)
+	}
+
+	klog.Info("scenario: pod1 is bound to " + pod1.Spec.NodeName)
+	if pod9.Spec.NodeName != "" {
+		klog.Fatal("scenario: pod9 should not be bound yet")
+	}
+	klog.Info("scenario: pod9 has not be bound yet")
+
+	// wait pod9
+	time.Sleep(7 * time.Second)
+
+	pod9, err = client.CoreV1().Pods("default").Get(ctx, "pod9", metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("get pod: %w", err)
 	}
 
 	// pod1 always bound to node1, because node1 got high score from nodenumber score plugin
-	klog.Info("scenario: pod1 is bound to " + pod.Spec.NodeName)
+	klog.Info("scenario: pod9 is bound to " + pod9.Spec.NodeName)
 
 	return nil
 }
