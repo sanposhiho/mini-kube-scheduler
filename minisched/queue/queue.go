@@ -21,7 +21,7 @@ func New() *SchedulingQueue {
 func (s *SchedulingQueue) Add(pod *v1.Pod) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	fmt.Println("hogehoge")
+	
 	s.activeQ = append(s.activeQ, pod)
 	return nil
 }
