@@ -117,6 +117,23 @@ func scenario(client clientset.Interface) error {
 
 	klog.Info("scenario: pod1 created")
 
+	_, err = client.CoreV1().Pods("default").Create(ctx, &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "pod3"},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name:  "container1",
+					Image: "k8s.gcr.io/pause:3.5",
+				},
+			},
+		},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("create pod: %w", err)
+	}
+
+	klog.Info("scenario: pod3 created")
+
 	// wait to schedule
 	time.Sleep(4 * time.Second)
 
@@ -146,6 +163,14 @@ func scenario(client clientset.Interface) error {
 
 	// pod1 always bound to node1, because node1 got high score from nodenumber score plugin
 	klog.Info("scenario: pod9 is bound to " + pod9.Spec.NodeName)
+
+	pod, err = client.CoreV1().Pods("default").Get(ctx, "pod3", metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("get pod: %w", err)
+	}
+
+	// pod1 always bound to node1, because node1 got high score from nodenumber score plugin
+	klog.Info("scenario: pod3 is bound to " + pod.Spec.NodeName)
 
 	return nil
 }
