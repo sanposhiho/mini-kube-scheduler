@@ -245,20 +245,12 @@ func (sched *Scheduler) RunScorePlugins(ctx context.Context, state *framework.Cy
 				Name:  n.Name,
 				Score: score,
 			}
-
-			if pl.ScoreExtensions() != nil {
-				status := pl.ScoreExtensions().NormalizeScore(ctx, state, pod, scoresMap[pl.Name()])
-				if !status.IsSuccess() {
-					return nil, status
-				}
-			}
 		}
 	}
 
-	// TODO: plugin weight
+	// TODO: plugin weight & normalizeScore
 
 	result := make(framework.NodeScoreList, 0, len(nodes))
-
 	for i := range nodes {
 		result = append(result, framework.NodeScore{Name: nodes[i].Name, Score: 0})
 		for j := range scoresMap {
