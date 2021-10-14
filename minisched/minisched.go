@@ -313,28 +313,35 @@ func (sched *Scheduler) RunPermitPlugins(ctx context.Context, state *framework.C
 	for _, pl := range sched.permitPlugins {
 		status, timeout := pl.Permit(ctx, state, pod, nodeName)
 		if !status.IsSuccess() {
+			// reject
 			if status.IsUnschedulable() {
-				klog.V(4).InfoS("Pod rejected by permit plugin", "pod", klog.KObj(pod), "plugin", pl.Name(), "status", status.Message())
+				klog.InfoS("Pod rejected by permit plugin", "pod", klog.KObj(pod), "plugin", pl.Name(), "status", status.Message())
 				status.SetFailedPlugin(pl.Name())
 				return status
 			}
+
+			// wait
 			if status.Code() == framework.Wait {
 				pluginsWaitTime[pl.Name()] = timeout
 				statusCode = framework.Wait
-			} else {
-				err := status.AsError()
-				klog.ErrorS(err, "Failed running Permit plugin", "plugin", pl.Name(), "pod", klog.KObj(pod))
-				return framework.AsStatus(fmt.Errorf("running Permit plugin %q: %w", pl.Name(), err)).WithFailedPlugin(pl.Name())
+				continue
 			}
+
+			// other errors
+			err := status.AsError()
+			klog.ErrorS(err, "Failed running Permit plugin", "plugin", pl.Name(), "pod", klog.KObj(pod))
+			return framework.AsStatus(fmt.Errorf("running Permit plugin %q: %w", pl.Name(), err)).WithFailedPlugin(pl.Name())
 		}
 	}
+
 	if statusCode == framework.Wait {
 		waitingPod := waitingpod.NewWaitingPod(pod, pluginsWaitTime)
 		sched.waitingPods[pod.UID] = waitingPod
 		msg := fmt.Sprintf("one or more plugins asked to wait and no plugin rejected pod %q", pod.Name)
-		klog.V(4).InfoS("One or more plugins asked to wait and no plugin rejected pod", "pod", klog.KObj(pod))
+		klog.InfoS("One or more plugins asked to wait and no plugin rejected pod", "pod", klog.KObj(pod))
 		return framework.NewStatus(framework.Wait, msg)
 	}
+
 	return nil
 }
 
