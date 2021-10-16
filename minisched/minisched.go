@@ -5,126 +5,15 @@ import (
 	"fmt"
 	"math/rand"
 
-	"github.com/sanposhiho/mini-kube-scheduler/minisched/plugins/score/nodenumber"
-
 	"k8s.io/kubernetes/pkg/scheduler/framework"
-	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodename"
 
 	"k8s.io/klog/v2"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/sanposhiho/mini-kube-scheduler/minisched/queue"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/informers"
-	clientset "k8s.io/client-go/kubernetes"
 )
-
-type Scheduler struct {
-	SchedulingQueue *queue.SchedulingQueue
-
-	client clientset.Interface
-
-	filterPlugins   []framework.FilterPlugin
-	preScorePlugins []framework.PreScorePlugin
-	scorePlugins    []framework.ScorePlugin
-}
-
-// =======
-// funcs for initialize
-// =======
-
-func New(
-	client clientset.Interface,
-	informerFactory informers.SharedInformerFactory,
-) (*Scheduler, error) {
-	filterP, err := createFilterPlugins()
-	if err != nil {
-		return nil, fmt.Errorf("create filter plugins: %w", err)
-	}
-
-	preScoreP, err := createPreScorePlugins()
-	if err != nil {
-		return nil, fmt.Errorf("create pre score plugins: %w", err)
-	}
-
-	scoreP, err := createScorePlugins()
-	if err != nil {
-		return nil, fmt.Errorf("create score plugins: %w", err)
-	}
-
-	sched := &Scheduler{
-		SchedulingQueue: queue.New(),
-		client:          client,
-
-		filterPlugins:   filterP,
-		preScorePlugins: preScoreP,
-		scorePlugins:    scoreP,
-	}
-
-	addAllEventHandlers(sched, informerFactory)
-
-	return sched, nil
-}
-
-func createFilterPlugins() ([]framework.FilterPlugin, error) {
-	// nodename is FilterPlugin.
-	nodenameplugin, err := nodename.New(nil, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create nodename plugin: %w", err)
-	}
-
-	// We use nodename plugin only.
-	filterPlugins := []framework.FilterPlugin{
-		nodenameplugin.(framework.FilterPlugin),
-	}
-
-	return filterPlugins, nil
-}
-
-func createPreScorePlugins() ([]framework.PreScorePlugin, error) {
-	// nodenumber is FilterPlugin.
-	nodenumberplugin, err := createNodeNumberPlugin()
-	if err != nil {
-		return nil, fmt.Errorf("create nodenumber plugin: %w", err)
-	}
-
-	// We use nodenumber plugin only.
-	preScorePlugins := []framework.PreScorePlugin{
-		nodenumberplugin.(framework.PreScorePlugin),
-	}
-
-	return preScorePlugins, nil
-}
-
-func createScorePlugins() ([]framework.ScorePlugin, error) {
-	// nodenumber is FilterPlugin.
-	nodenumberplugin, err := createNodeNumberPlugin()
-	if err != nil {
-		return nil, fmt.Errorf("create nodenumber plugin: %w", err)
-	}
-
-	// We use nodenumber plugin only.
-	filterPlugins := []framework.ScorePlugin{
-		nodenumberplugin.(framework.ScorePlugin),
-	}
-
-	return filterPlugins, nil
-}
-
-var nodenumberplugin framework.Plugin
-
-func createNodeNumberPlugin() (framework.Plugin, error) {
-	if nodenumberplugin != nil {
-		return nodenumberplugin, nil
-	}
-
-	p, err := nodenumber.New(nil, nil)
-	nodenumberplugin = p
-
-	return p, err
-}
 
 // ======
 // main logic
