@@ -2,11 +2,8 @@ package minisched
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
 	"time"
-
-	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodename"
 
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 
@@ -15,59 +12,8 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/sanposhiho/mini-kube-scheduler/minisched/queue"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/informers"
-	clientset "k8s.io/client-go/kubernetes"
 )
-
-type Scheduler struct {
-	SchedulingQueue *queue.SchedulingQueue
-
-	client clientset.Interface
-
-	filterPlugins []framework.FilterPlugin
-}
-
-// =======
-// funcs for initialize
-// =======
-
-func New(
-	client clientset.Interface,
-	informerFactory informers.SharedInformerFactory,
-) (*Scheduler, error) {
-	filterP, err := createFilterPlugins()
-	if err != nil {
-		return nil, fmt.Errorf("create filter plugins: %w", err)
-	}
-
-	sched := &Scheduler{
-		SchedulingQueue: queue.New(),
-		client:          client,
-
-		filterPlugins: filterP,
-	}
-
-	addAllEventHandlers(sched, informerFactory)
-
-	return sched, nil
-}
-
-func createFilterPlugins() ([]framework.FilterPlugin, error) {
-	// nodename is FilterPlugin.
-	nodenameplugin, err := nodename.New(nil, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create nodename plugin: %w", err)
-	}
-
-	// We use nodename plugin only.
-	filterPlugins := []framework.FilterPlugin{
-		nodenameplugin.(framework.FilterPlugin),
-	}
-
-	return filterPlugins, nil
-}
 
 // ======
 // main logic
@@ -104,7 +50,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 
 	// select node randomly
 	rand.Seed(time.Now().UnixNano())
-	selectedNode := fasibleNodes[rand.Intn(len(nodes.Items))]
+	selectedNode := fasibleNodes[rand.Intn(len(fasibleNodes))]
 
 	if err := sched.Bind(ctx, nil, pod, selectedNode.Name); err != nil {
 		klog.Error(err)
