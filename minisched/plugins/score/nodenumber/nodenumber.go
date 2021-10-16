@@ -63,6 +63,12 @@ func (pl *NodeNumber) PreScore(ctx context.Context, state *framework.CycleState,
 	return nil
 }
 
+func (pl *NodeNumber) EventsToRegister() []framework.ClusterEvent {
+	return []framework.ClusterEvent{
+		{Resource: framework.Node, ActionType: framework.Add},
+	}
+}
+
 // Score invoked at the score extension point.
 func (pl *NodeNumber) Score(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) {
 	data, err := state.Read(preScoreStateKey)
