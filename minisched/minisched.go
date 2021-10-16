@@ -12,31 +12,8 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/sanposhiho/mini-kube-scheduler/minisched/queue"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/informers"
-	clientset "k8s.io/client-go/kubernetes"
 )
-
-type Scheduler struct {
-	SchedulingQueue *queue.SchedulingQueue
-
-	client clientset.Interface
-}
-
-func New(
-	client clientset.Interface,
-	informerFactory informers.SharedInformerFactory,
-) *Scheduler {
-	sched := &Scheduler{
-		SchedulingQueue: queue.New(),
-		client:          client,
-	}
-
-	addAllEventHandlers(sched, informerFactory)
-
-	return sched
-}
 
 func (sched *Scheduler) Run(ctx context.Context) {
 	wait.UntilWithContext(ctx, sched.scheduleOne, 0)
