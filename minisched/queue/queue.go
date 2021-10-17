@@ -23,11 +23,12 @@ type SchedulingQueue struct {
 	clusterEventMap map[framework.ClusterEvent]sets.String
 }
 
-func New() *SchedulingQueue {
+func New(clusterEventMap map[framework.ClusterEvent]sets.String) *SchedulingQueue {
 	return &SchedulingQueue{
-		activeQ:        []*framework.QueuedPodInfo{},
-		podBackoffQ:    []*framework.QueuedPodInfo{},
-		unschedulableQ: map[string]*framework.QueuedPodInfo{},
+		activeQ:         []*framework.QueuedPodInfo{},
+		podBackoffQ:     []*framework.QueuedPodInfo{},
+		unschedulableQ:  map[string]*framework.QueuedPodInfo{},
+		clusterEventMap: clusterEventMap,
 	}
 }
 

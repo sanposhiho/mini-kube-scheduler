@@ -3,6 +3,8 @@ package minisched
 import (
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"github.com/sanposhiho/mini-kube-scheduler/minisched/plugins/score/nodenumber"
 	"github.com/sanposhiho/mini-kube-scheduler/minisched/queue"
 	"github.com/sanposhiho/mini-kube-scheduler/minisched/waitingpod"
@@ -35,9 +37,8 @@ func New(
 	informerFactory informers.SharedInformerFactory,
 ) (*Scheduler, error) {
 	sched := &Scheduler{
-		SchedulingQueue: queue.New(),
-		client:          client,
-		waitingPods:     map[types.UID]*waitingpod.WaitingPod{},
+		client:      client,
+		waitingPods: map[types.UID]*waitingpod.WaitingPod{},
 	}
 
 	filterP, err := createFilterPlugins(sched)
@@ -64,12 +65,14 @@ func New(
 	}
 	sched.permitPlugins = permitP
 
-	gvks, err := createGVKs(sched)
+	events, err := eventsToRegister(sched)
 	if err != nil {
 		return nil, fmt.Errorf("create gvks: %w")
 	}
 
-	addAllEventHandlers(sched, informerFactory, gvks)
+	sched.SchedulingQueue = queue.New(events)
+
+	addAllEventHandlers(sched, informerFactory, unionedGVKs(events))
 
 	return sched, nil
 }
@@ -134,7 +137,7 @@ func createPermitPlugins(h waitingpod.Handle) ([]framework.PermitPlugin, error) 
 	return permitPlugins, nil
 }
 
-func createGVKs(h waitingpod.Handle) (map[framework.GVK]framework.ActionType, error) {
+func eventsToRegister(h waitingpod.Handle) (map[framework.ClusterEvent]sets.String, error) {
 	nunschedulablePlugin, err := createNodeUnschedulablePlugin()
 	if err != nil {
 		return nil, fmt.Errorf("create node unschedulable plugin: %w", err)
@@ -144,14 +147,28 @@ func createGVKs(h waitingpod.Handle) (map[framework.GVK]framework.ActionType, er
 		return nil, fmt.Errorf("create node number plugin: %w", err)
 	}
 
-	m := append(nunschedulablePlugin.(framework.EnqueueExtensions).EventsToRegister(), nnumberPlugin.(framework.EnqueueExtensions).EventsToRegister()...)
+	clusterEventMap := make(map[framework.ClusterEvent]sets.String)
+	nunschedulablePluginEvents := nunschedulablePlugin.(framework.EnqueueExtensions).EventsToRegister()
+	registerClusterEvents(nunschedulablePlugin.Name(), clusterEventMap, nunschedulablePluginEvents)
+	nnumberPluginEvents := nnumberPlugin.(framework.EnqueueExtensions).EventsToRegister()
+	registerClusterEvents(nunschedulablePlugin.Name(), clusterEventMap, nnumberPluginEvents)
 
-	return unionedGVKs(m), nil
+	return clusterEventMap, nil
 }
 
-func unionedGVKs(m []framework.ClusterEvent) map[framework.GVK]framework.ActionType {
+func registerClusterEvents(name string, eventToPlugins map[framework.ClusterEvent]sets.String, evts []framework.ClusterEvent) {
+	for _, evt := range evts {
+		if eventToPlugins[evt] == nil {
+			eventToPlugins[evt] = sets.NewString(name)
+		} else {
+			eventToPlugins[evt].Insert(name)
+		}
+	}
+}
+
+func unionedGVKs(m map[framework.ClusterEvent]sets.String) map[framework.GVK]framework.ActionType {
 	gvkMap := make(map[framework.GVK]framework.ActionType)
-	for _, evt := range m {
+	for evt := range m {
 		if _, ok := gvkMap[evt.Resource]; ok {
 			gvkMap[evt.Resource] |= evt.ActionType
 		} else {
