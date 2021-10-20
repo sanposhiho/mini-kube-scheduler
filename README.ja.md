@@ -68,32 +68,32 @@ func scenario(client clientset.Interface) error {
 
 TODO: 各ブランチにそのブランチで追加された機能の説明を加える。
 
-1. [initial scheduler](/tree/01/init-scheduler)
+1. [initial scheduler](https://github.com/sanposhiho/mini-kube-scheduler/tree/initial-random-scheduler)
 
 最も初期の段階のスケジューラーであり、全てのNodeから完全にランダムにPodを配置します。
 
-2. [filter plugins](/tree/02/filter-plugin)
+2. [filter plugins](https://github.com/sanposhiho/mini-kube-scheduler/tree/filter-plugin)
 
 このブランチのスケジューラーはfilter pluginの実行に対応しています。unschedulable nodeプラグインのみが有効になっています。
 
-3. [score plugins](/tree/03/score-plugin)
+3. [score plugins](https://github.com/sanposhiho/mini-kube-scheduler/tree/score-plugin)
 
 このブランチのスケジューラーはさらにscore pluginの実行に対応しています。custom pluginであるnodenumberプラグインのみがscore pluginとして有効になっています。nodenumber プラグインの実装もブランチ内に存在しています。
 
-4. [prescore plugins](/tree/04/prescore-plugins)
+4. [prescore plugins](https://github.com/sanposhiho/mini-kube-scheduler/tree/prescore-plugin)
 
 このブランチのスケジューラーはさらにpre-score pluginの実行に対応しています。custom pluginであるnodenumberプラグインにpre-score pluginの機能を実装し、有効にしています。
 
-5. [permit plugins](/tree/05/permit-plugins)
+5. [permit plugins](https://github.com/sanposhiho/mini-kube-scheduler/tree/permit-plugin)
 
 このブランチのスケジューラーはさらにpremit pluginの実行に対応しています。custom pluginであるnodenumberプラグインにpremit pluginの機能を実装し、有効にしています。
 また、このブランチでは、Binding Cycleが並行にgoroutineで実行されるようになっています。
 
-6. [scheduling queue](/tree/06/scheduling-queue)
+6. [scheduling queue](https://github.com/sanposhiho/mini-kube-scheduler/tree/scheduling-queue)
 
 このブランチにはScheduling Queueが実装されています。また、スケジュールの失敗時に、PodをunschedulableとしてQueueに戻すことにも対応しています。
 
-7. [eventhandler](/tree/07/event-handler)
+7. [eventhandler](https://github.com/sanposhiho/mini-kube-scheduler/tree/event-handler)
 
 このブランチにはEventHandlerを用いたQueueの更新に対応しています。これにて、スケジュールに失敗したPodの再スケジュールに対応しています。
 
