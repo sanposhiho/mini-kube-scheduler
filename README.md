@@ -70,32 +70,32 @@ You can use them to learn the scheduler step by step.
 
 TODO: I'm planning to add docs to describe what is new feature for each branchs.
 
-1. [initial scheduler](/tree/01/init-scheduler)
+1. [initial scheduler](https://github.com/sanposhiho/mini-kube-scheduler/tree/initial-random-scheduler)
 
 This scheduler selects node for pod randomly.
 
-2. [filter plugins](/tree/02/filter-plugin)
+2. [filter plugins](https://github.com/sanposhiho/mini-kube-scheduler/tree/filter-plugin)
 
 This scheduler selects node for pod with only filter plugin. Only unschedulable node plugin is enabled as filter plugin.
 
-3. [score plugins](/tree/03/score-plugin)
+3. [score plugins](https://github.com/sanposhiho/mini-kube-scheduler/tree/score-plugin)
 
 This scheduler selects node for pod with filter and score plugin. Only nodenumber plugin(implemented as custom plugin) is enabled as score plugin.
 
-4. [prescore plugins](/tree/04/prescore-plugins)
+4. [prescore plugins](https://github.com/sanposhiho/mini-kube-scheduler/tree/prescore-plugin)
 
 This scheduler supports pre-score plugins. The nodenumber plugin is improved so that it is also used as prescore plugins. 
 
-5. [permit plugins](/tree/05/permit-plugins)
+5. [permit plugins](https://github.com/sanposhiho/mini-kube-scheduler/tree/permit-plugins)
 
 This scheduler supports permit plugins. The nodenumber plugin is improved so that it is also used as permit plugins.
 And binding cycle is now goroutined(work in parallel).
 
-6. [scheduling queue](/tree/06/scheduling-queue)
+6. [scheduling queue](https://github.com/sanposhiho/mini-kube-scheduler/tree/scheduling-queue)
 
 This branch implements Scheduling Queue. It also supports putting the Pod back into the Queue as unschedulable when the schedule fails.
 
-7. [eventhandler](/tree/07/event-handler)
+7. [eventhandler](https://github.com/sanposhiho/mini-kube-scheduler/tree/event-handler)
 
 This branch has support for updating Queues using EventHandler. It supports re-scheduling of pods that fail to schedule.
 
