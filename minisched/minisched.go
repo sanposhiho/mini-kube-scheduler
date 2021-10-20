@@ -12,6 +12,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -40,13 +41,9 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	klog.Info("minischeduler: got nodes: ", nodes)
 
 	// filter
-	fasibleNodes, status := sched.RunFilterPlugins(ctx, state, pod, nodes.Items)
-	if !status.IsSuccess() {
-		klog.Error(status.AsError())
-		return
-	}
-	if len(fasibleNodes) == 0 {
-		klog.Info("no fasible nodes for " + pod.Name)
+	fasibleNodes, err := sched.RunFilterPlugins(ctx, nil, pod, nodes.Items)
+	if err != nil {
+		klog.Error(err)
 		return
 	}
 
@@ -54,7 +51,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	klog.Info("minischeduler: fasible nodes: ", fasibleNodes)
 
 	// pre score
-	status = sched.RunPreScorePlugins(ctx, state, pod, fasibleNodes)
+	status := sched.RunPreScorePlugins(ctx, state, pod, fasibleNodes)
 	if !status.IsSuccess() {
 		klog.Error(status.AsError())
 		return
@@ -85,8 +82,13 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	klog.Info("minischeduler: Bind Pod successfully")
 }
 
-func (sched *Scheduler) RunFilterPlugins(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodes []v1.Node) ([]*v1.Node, *framework.Status) {
+func (sched *Scheduler) RunFilterPlugins(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodes []v1.Node) ([]*v1.Node, error) {
 	feasibleNodes := make([]*v1.Node, 0, len(nodes))
+
+	diagnosis := framework.Diagnosis{
+		NodeToStatusMap:      make(framework.NodeToStatusMap),
+		UnschedulablePlugins: sets.NewString(),
+	}
 
 	// TODO: consider about nominated pod
 	for _, n := range nodes {
@@ -99,6 +101,7 @@ func (sched *Scheduler) RunFilterPlugins(ctx context.Context, state *framework.C
 			status = pl.Filter(ctx, state, pod, nodeInfo)
 			if !status.IsSuccess() {
 				status.SetFailedPlugin(pl.Name())
+				diagnosis.UnschedulablePlugins.Insert(status.FailedPlugin())
 				break
 			}
 		}
@@ -107,9 +110,15 @@ func (sched *Scheduler) RunFilterPlugins(ctx context.Context, state *framework.C
 		}
 	}
 
+	if len(feasibleNodes) == 0 {
+		return nil, &framework.FitError{
+			Pod:       pod,
+			Diagnosis: diagnosis,
+		}
+	}
+
 	return feasibleNodes, nil
 }
-
 func (sched *Scheduler) RunPreScorePlugins(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodes []*v1.Node) *framework.Status {
 	for _, pl := range sched.preScorePlugins {
 		status := pl.PreScore(ctx, state, pod, nodes)
