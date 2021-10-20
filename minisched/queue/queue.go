@@ -91,6 +91,7 @@ func (s *SchedulingQueue) NextPod() *v1.Pod {
 	return p.Pod
 }
 
+// this function is the similar to AddUnschedulableIfNotPresent on original kube-scheduler.
 func (s *SchedulingQueue) AddUnschedulable(pInfo *framework.QueuedPodInfo) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -200,27 +201,6 @@ func intersect(x, y sets.String) bool {
 	return false
 }
 
-//func updatePod(oldPodInfo interface{}, newPod *v1.Pod) *framework.QueuedPodInfo {
-//	pInfo := oldPodInfo.(*framework.QueuedPodInfo)
-//	pInfo.Update(newPod)
-//	return pInfo
-//}
-
-// isPodUpdated checks if the pod is updated in a way that it may have become
-// schedulable. It drops status of the pod and compares it with old version.
-//func isPodUpdated(oldPod, newPod *v1.Pod) bool {
-//	strip := func(pod *v1.Pod) *v1.Pod {
-//		s := pod.DeepCopy()
-//		s.ResourceVersion = ""
-//		s.Generation = 0
-//		s.Status = v1.PodStatus{}
-//		s.ManagedFields = nil
-//		s.Finalizers = nil
-//		return s
-//	}
-//	return !reflect.DeepEqual(strip(oldPod), strip(newPod))
-//}
-
 // isPodBackingoff returns true if a pod is still waiting for its backoff timer.
 // If this returns true, the pod should not be re-tried.
 func isPodBackingoff(podInfo *framework.QueuedPodInfo) bool {
@@ -253,14 +233,3 @@ func calculateBackoffDuration(podInfo *framework.QueuedPodInfo) time.Duration {
 	}
 	return duration
 }
-
-//func getFromQ(q []*framework.QueuedPodInfo, key string) *framework.QueuedPodInfo {
-//	for _, s := range q {
-//		k := keyFunc(s)
-//		if k == key {
-//			return s
-//		}
-//	}
-//
-//	return nil
-//}
