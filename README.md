@@ -123,5 +123,4 @@ And, `make start` starts your scenario.
 
 This mini-kube-scheduler starts scheduler, etcd, api-server and pv-controller.
 
-The whole mechanism is based on [kubernetes-sigs/kube-scheduler-simulator](https://github.com/kubernetes-sigs/kube-scheduler-simulator)
-
+The whole mechanism is based on [kubernetes-sigs/kube-scheduler-simulator](https://github.com/kubernetes-sigs/kube-scheduler-simulator)　and [sanposhiho/kube-scheduler-simulator-cli](https://github.com/sanposhiho/kube-scheduler-simulator-cli)

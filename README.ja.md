@@ -124,4 +124,4 @@ etcdに関してはこちらのKubernetes本体に用意されているインス
 
 # 参考
 
-このmini-kube-schedulerのスケジューラーの起動やシナリオの実行などの全体的な仕組みに関しては[kubernetes-sigs/kube-scheduler-simulator](https://github.com/kubernetes-sigs/kube-scheduler-simulator)を参考にしております。
+このmini-kube-schedulerのスケジューラーの起動やシナリオの実行などの全体的な仕組みに関しては[kubernetes-sigs/kube-scheduler-simulator](https://github.com/kubernetes-sigs/kube-scheduler-simulator)と[sanposhiho/kube-scheduler-simulator-cli](https://github.com/sanposhiho/kube-scheduler-simulator-cli)をベースにしています.
