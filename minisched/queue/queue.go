@@ -62,6 +62,8 @@ func (s *SchedulingQueue) MoveAllToActiveOrBackoffQueue(event framework.ClusterE
 		unschedulablePods = append(unschedulablePods, pInfo)
 	}
 	s.movePodsToActiveOrBackoffQueue(unschedulablePods, event)
+
+	s.lock.Signal()
 }
 
 // NOTE: this function assumes lock has been acquired in caller
