@@ -1,7 +1,6 @@
 package queue
 
 import (
-	"fmt"
 	"sync"
 
 	v1 "k8s.io/api/core/v1"
@@ -9,29 +8,34 @@ import (
 
 type SchedulingQueue struct {
 	activeQ []*v1.Pod
-	lock    sync.RWMutex
+	lock    *sync.Cond
 }
 
 func New() *SchedulingQueue {
 	return &SchedulingQueue{
 		activeQ: []*v1.Pod{},
+		lock:    sync.NewCond(&sync.Mutex{}),
 	}
 }
 
 func (s *SchedulingQueue) Add(pod *v1.Pod) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	fmt.Println("hogehoge")
+	s.lock.L.Lock()
+	defer s.lock.L.Unlock()
+
 	s.activeQ = append(s.activeQ, pod)
+	s.lock.Signal()
 	return nil
 }
 
 func (s *SchedulingQueue) NextPod() *v1.Pod {
 	// wait
+	s.lock.L.Lock()
 	for len(s.activeQ) == 0 {
+		s.lock.Wait()
 	}
 
 	p := s.activeQ[0]
 	s.activeQ = s.activeQ[1:]
+	s.lock.L.Unlock()
 	return p
 }
