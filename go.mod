@@ -32,12 +32,15 @@ replace (
 )
 
 require (
+	cloud.google.com/go v0.60.0 // indirect
 	github.com/golang/mock v1.4.4
-	github.com/golangci/golangci-lint v1.41.1
 	github.com/google/uuid v1.1.2
-	github.com/labstack/echo/v4 v4.5.0
-	github.com/labstack/gommon v0.3.0
+	github.com/imdario/mergo v0.3.8 // indirect
+	github.com/onsi/ginkgo v1.16.1 // indirect
+	github.com/onsi/gomega v1.11.0 // indirect
 	github.com/stretchr/testify v1.7.0
+	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2 // indirect
+	golang.org/x/tools v0.1.3 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 	k8s.io/api v1.22.0
 	k8s.io/apiextensions-apiserver v0.0.0

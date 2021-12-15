@@ -7,13 +7,16 @@ import (
 
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 
-	"k8s.io/klog/v2"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 func (sched *Scheduler) Run(ctx context.Context) {
 	wait.UntilWithContext(ctx, sched.scheduleOne, 0)
@@ -33,7 +36,6 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	klog.Info("minischeduler: Got Nodes successfully")
 
 	// select node randomly
-	rand.Seed(time.Now().UnixNano())
 	selectedNode := nodes.Items[rand.Intn(len(nodes.Items))]
 
 	if err := sched.Bind(ctx, nil, pod, selectedNode.Name); err != nil {
