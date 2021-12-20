@@ -33,7 +33,7 @@ func New(clusterEventMap map[framework.ClusterEvent]sets.String) *SchedulingQueu
 	}
 }
 
-func (s *SchedulingQueue) Add(pod *v1.Pod) error {
+func (s *SchedulingQueue) Add(pod *v1.Pod) {
 	s.lock.L.Lock()
 	defer s.lock.L.Unlock()
 
@@ -41,7 +41,7 @@ func (s *SchedulingQueue) Add(pod *v1.Pod) error {
 
 	s.activeQ = append(s.activeQ, podInfo)
 	s.lock.Signal()
-	return nil
+	return
 }
 
 // PreEnqueueCheck is a function type. It's used to build functions that
