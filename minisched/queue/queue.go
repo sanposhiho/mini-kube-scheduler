@@ -18,13 +18,13 @@ func New() *SchedulingQueue {
 	}
 }
 
-func (s *SchedulingQueue) Add(pod *v1.Pod) error {
+func (s *SchedulingQueue) Add(pod *v1.Pod) {
 	s.lock.L.Lock()
 	defer s.lock.L.Unlock()
 
 	s.activeQ = append(s.activeQ, pod)
 	s.lock.Signal()
-	return nil
+	return
 }
 
 func (s *SchedulingQueue) NextPod() *v1.Pod {
