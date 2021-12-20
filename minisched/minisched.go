@@ -5,8 +5,6 @@ import (
 	"math/rand"
 	"time"
 
-	"k8s.io/kubernetes/pkg/scheduler/framework"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -38,7 +36,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	// select node randomly
 	selectedNode := nodes.Items[rand.Intn(len(nodes.Items))]
 
-	if err := sched.Bind(ctx, nil, pod, selectedNode.Name); err != nil {
+	if err := sched.Bind(ctx, pod, selectedNode.Name); err != nil {
 		klog.Error(err)
 		return
 	}
@@ -46,7 +44,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	klog.Info("minischeduler: Bind Pod successfully")
 }
 
-func (sched *Scheduler) Bind(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) error {
+func (sched *Scheduler) Bind(ctx context.Context, p *v1.Pod, nodeName string) error {
 	binding := &v1.Binding{
 		ObjectMeta: metav1.ObjectMeta{Namespace: p.Namespace, Name: p.Name, UID: p.UID},
 		Target:     v1.ObjectReference{Kind: "Node", Name: nodeName},
