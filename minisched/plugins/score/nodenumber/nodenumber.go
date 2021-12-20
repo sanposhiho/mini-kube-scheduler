@@ -2,6 +2,7 @@ package nodenumber
 
 import (
 	"context"
+	"errors"
 	"strconv"
 
 	v1 "k8s.io/api/core/v1"
@@ -61,7 +62,10 @@ func (pl *NodeNumber) Score(ctx context.Context, state *framework.CycleState, po
 		return 0, framework.AsStatus(err)
 	}
 
-	s := data.(*preScoreState)
+	s, ok := data.(*preScoreState)
+	if !ok {
+		return 0, framework.AsStatus(errors.New("failed to convert pre score state"))
+	}
 
 	nodeNameLastChar := nodeName[len(nodeName)-1:]
 
