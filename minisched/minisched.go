@@ -74,7 +74,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 		return
 	}
 
-	if err := sched.Bind(ctx, nil, pod, hostname); err != nil {
+	if err := sched.Bind(ctx, pod, hostname); err != nil {
 		klog.Error(err)
 		return
 	}
@@ -159,7 +159,7 @@ func (sched *Scheduler) RunScorePlugins(ctx context.Context, state *framework.Cy
 	return result, nil
 }
 
-func (sched *Scheduler) Bind(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) error {
+func (sched *Scheduler) Bind(ctx context.Context, p *v1.Pod, nodeName string) error {
 	binding := &v1.Binding{
 		ObjectMeta: metav1.ObjectMeta{Namespace: p.Namespace, Name: p.Name, UID: p.UID},
 		Target:     v1.ObjectReference{Kind: "Node", Name: nodeName},
