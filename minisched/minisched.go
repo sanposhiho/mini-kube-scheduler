@@ -40,14 +40,14 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	klog.Info("minischeduler: got nodes: ", nodes)
 
 	// filter
-	fasibleNodes, err := sched.RunFilterPlugins(ctx, nil, pod, nodes.Items)
+	feasibleNodes, err := sched.RunFilterPlugins(ctx, nil, pod, nodes.Items)
 	if err != nil {
 		klog.Error(err)
 		return
 	}
 	// select node randomly
 	rand.Seed(time.Now().UnixNano())
-	selectedNode := fasibleNodes[rand.Intn(len(fasibleNodes))]
+	selectedNode := feasibleNodes[rand.Intn(len(feasibleNodes))]
 
 	if err := sched.Bind(ctx, nil, pod, selectedNode.Name); err != nil {
 		klog.Error(err)
