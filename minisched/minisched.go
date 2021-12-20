@@ -41,17 +41,17 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	klog.Info("minischeduler: got nodes: ", nodes)
 
 	// filter
-	fasibleNodes, err := sched.RunFilterPlugins(ctx, nil, pod, nodes.Items)
+	feasibleNodes, err := sched.RunFilterPlugins(ctx, nil, pod, nodes.Items)
 	if err != nil {
 		klog.Error(err)
 		return
 	}
 
 	klog.Info("minischeduler: ran filter plugins successfully")
-	klog.Info("minischeduler: fasible nodes: ", fasibleNodes)
+	klog.Info("minischeduler: fasible nodes: ", feasibleNodes)
 
 	// pre score
-	status := sched.RunPreScorePlugins(ctx, state, pod, fasibleNodes)
+	status := sched.RunPreScorePlugins(ctx, state, pod, feasibleNodes)
 	if !status.IsSuccess() {
 		klog.Error(status.AsError())
 		return
@@ -59,7 +59,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	klog.Info("minischeduler: ran pre score plugins successfully")
 
 	// score
-	score, status := sched.RunScorePlugins(ctx, state, pod, fasibleNodes)
+	score, status := sched.RunScorePlugins(ctx, state, pod, feasibleNodes)
 	if !status.IsSuccess() {
 		klog.Error(status.AsError())
 		return
