@@ -98,7 +98,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 			return
 		}
 
-		if err := sched.Bind(ctx, nil, pod, nodename); err != nil {
+		if err := sched.Bind(ctx, pod, nodename); err != nil {
 			klog.Error(err)
 			return
 		}
@@ -236,7 +236,7 @@ func (sched *Scheduler) WaitOnPermit(ctx context.Context, pod *v1.Pod) *framewor
 	return nil
 }
 
-func (sched *Scheduler) Bind(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) error {
+func (sched *Scheduler) Bind(ctx context.Context, p *v1.Pod, nodeName string) error {
 	binding := &v1.Binding{
 		ObjectMeta: metav1.ObjectMeta{Namespace: p.Namespace, Name: p.Name, UID: p.UID},
 		Target:     v1.ObjectReference{Kind: "Node", Name: nodeName},
