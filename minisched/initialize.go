@@ -107,11 +107,11 @@ func createScorePlugins(h waitingpod.Handle) ([]framework.ScorePlugin, error) {
 	}
 
 	// We use nodenumber plugin only.
-	filterPlugins := []framework.ScorePlugin{
+	scorePlugins := []framework.ScorePlugin{
 		nodenumberplugin.(framework.ScorePlugin),
 	}
 
-	return filterPlugins, nil
+	return scorePlugins, nil
 }
 
 func createPermitPlugins(h waitingpod.Handle) ([]framework.PermitPlugin, error) {
