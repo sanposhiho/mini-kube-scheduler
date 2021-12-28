@@ -1,10 +1,7 @@
 package minisched
 
 import (
-	"fmt"
-
 	v1 "k8s.io/api/core/v1"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
 )
@@ -38,9 +35,9 @@ func assignedPod(pod *v1.Pod) bool {
 }
 
 func (sched *Scheduler) addPodToSchedulingQueue(obj interface{}) {
-	pod := obj.(*v1.Pod)
-
-	if err := sched.SchedulingQueue.Add(pod); err != nil {
-		utilruntime.HandleError(fmt.Errorf("unable to queue %T: %v", obj, err))
+	pod, ok := obj.(*v1.Pod)
+	if !ok {
+		return
 	}
+	sched.SchedulingQueue.Add(pod)
 }
