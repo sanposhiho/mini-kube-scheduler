@@ -95,11 +95,11 @@ func createScorePlugins() ([]framework.ScorePlugin, error) {
 	}
 
 	// We use nodenumber plugin only.
-	filterPlugins := []framework.ScorePlugin{
+	scorePlugins := []framework.ScorePlugin{
 		nodenumberplugin.(framework.ScorePlugin),
 	}
 
-	return filterPlugins, nil
+	return scorePlugins, nil
 }
 
 // =====
