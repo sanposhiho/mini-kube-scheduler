@@ -135,7 +135,7 @@ func scenario(client clientset.Interface) error {
 		return fmt.Errorf("get pod: %w", err)
 	}
 
-	// pod1 always bound to node1, because node1 got high score from nodenumber score plugin
+	// pod3 always bound to node3, because node3 got high score from nodenumber score plugin
 	klog.Info("scenario: pod3 is bound to " + pod.Spec.NodeName)
 
 	return nil
