@@ -47,7 +47,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	klog.Info("minischeduler: got nodes: ", nodes)
 
 	// filter
-	fasibleNodes, err := sched.RunFilterPlugins(ctx, state, pod, nodes.Items)
+	feasibleNodes, err := sched.RunFilterPlugins(ctx, state, pod, nodes.Items)
 	if err != nil {
 		klog.Error(err)
 		sched.ErrorFunc(pod, err)
@@ -55,10 +55,10 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	}
 
 	klog.Info("minischeduler: ran filter plugins successfully")
-	klog.Info("minischeduler: fasible nodes: ", fasibleNodes)
+	klog.Info("minischeduler: fasible nodes: ", feasibleNodes)
 
 	// pre score
-	status := sched.RunPreScorePlugins(ctx, state, pod, fasibleNodes)
+	status := sched.RunPreScorePlugins(ctx, state, pod, feasibleNodes)
 	if !status.IsSuccess() {
 		klog.Error(status.AsError())
 		sched.ErrorFunc(pod, err)
@@ -67,7 +67,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 	klog.Info("minischeduler: ran pre score plugins successfully")
 
 	// score
-	score, status := sched.RunScorePlugins(ctx, state, pod, fasibleNodes)
+	score, status := sched.RunScorePlugins(ctx, state, pod, feasibleNodes)
 	if !status.IsSuccess() {
 		klog.Error(status.AsError())
 		sched.ErrorFunc(pod, err)
@@ -103,7 +103,7 @@ func (sched *Scheduler) scheduleOne(ctx context.Context) {
 			return
 		}
 
-		if err := sched.Bind(ctx, nil, pod, nodename); err != nil {
+		if err := sched.Bind(ctx, pod, nodename); err != nil {
 			klog.Error(err)
 			sched.ErrorFunc(pod, err)
 			return
@@ -263,7 +263,7 @@ func (sched *Scheduler) WaitOnPermit(ctx context.Context, pod *v1.Pod) *framewor
 	return nil
 }
 
-func (sched *Scheduler) Bind(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) error {
+func (sched *Scheduler) Bind(ctx context.Context, p *v1.Pod, nodeName string) error {
 	binding := &v1.Binding{
 		ObjectMeta: metav1.ObjectMeta{Namespace: p.Namespace, Name: p.Name, UID: p.UID},
 		Target:     v1.ObjectReference{Kind: "Node", Name: nodeName},

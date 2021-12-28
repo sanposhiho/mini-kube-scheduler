@@ -14,7 +14,7 @@ import (
 )
 
 type SchedulingQueue struct {
-	lock sync.RWMutex
+	lock *sync.Cond
 
 	activeQ        []*framework.QueuedPodInfo
 	podBackoffQ    []*framework.QueuedPodInfo
@@ -29,17 +29,19 @@ func New(clusterEventMap map[framework.ClusterEvent]sets.String) *SchedulingQueu
 		podBackoffQ:     []*framework.QueuedPodInfo{},
 		unschedulableQ:  map[string]*framework.QueuedPodInfo{},
 		clusterEventMap: clusterEventMap,
+		lock:            sync.NewCond(&sync.Mutex{}),
 	}
 }
 
-func (s *SchedulingQueue) Add(pod *v1.Pod) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+func (s *SchedulingQueue) Add(pod *v1.Pod) {
+	s.lock.L.Lock()
+	defer s.lock.L.Unlock()
 
 	podInfo := s.newQueuedPodInfo(pod)
 
 	s.activeQ = append(s.activeQ, podInfo)
-	return nil
+	s.lock.Signal()
+	return
 }
 
 // PreEnqueueCheck is a function type. It's used to build functions that
@@ -52,13 +54,16 @@ type PreEnqueueCheck func(pod *v1.Pod) bool
 // if Pop() is waiting for an item, it receives the signal after all the pods are in the
 // queue and the head is the highest priority pod.
 func (s *SchedulingQueue) MoveAllToActiveOrBackoffQueue(event framework.ClusterEvent) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.lock.L.Lock()
+	defer s.lock.L.Unlock()
+
 	unschedulablePods := make([]*framework.QueuedPodInfo, 0, len(s.unschedulableQ))
 	for _, pInfo := range s.unschedulableQ {
 		unschedulablePods = append(unschedulablePods, pInfo)
 	}
 	s.movePodsToActiveOrBackoffQueue(unschedulablePods, event)
+
+	s.lock.Signal()
 }
 
 // NOTE: this function assumes lock has been acquired in caller
@@ -83,18 +88,21 @@ func (s *SchedulingQueue) movePodsToActiveOrBackoffQueue(podInfoList []*framewor
 
 func (s *SchedulingQueue) NextPod() *v1.Pod {
 	// wait
+	s.lock.L.Lock()
 	for len(s.activeQ) == 0 {
+		s.lock.Wait()
 	}
 
 	p := s.activeQ[0]
 	s.activeQ = s.activeQ[1:]
+	s.lock.L.Unlock()
 	return p.Pod
 }
 
 // this function is the similar to AddUnschedulableIfNotPresent on original kube-scheduler.
 func (s *SchedulingQueue) AddUnschedulable(pInfo *framework.QueuedPodInfo) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.lock.L.Lock()
+	defer s.lock.L.Unlock()
 
 	// Refresh the timestamp since the pod is re-added.
 	pInfo.Timestamp = time.Now()
